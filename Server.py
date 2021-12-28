@@ -5,6 +5,7 @@ from time import sleep, time
 import struct
 import random
 import scapy.all
+import sys
 
 questionsList = [("2+2", "4"), ("5-2", "3"), ("9-7", "2"), ("8+1", "9"),
                  ("6-5", "1"), ("9-9", "0"), ("5+3", "8"), ("3+4", "7")]
@@ -16,7 +17,7 @@ currAnswer = None
 ANS_POS = 0
 TIME_POS = 1
 SERVER_IP = socket.gethostbyname(socket.gethostname())
-SERVER_PORT = random.randrange(5000,7000)
+SERVER_PORT = random.randrange(5000, 7000)
 MAX_BUFFER_SIZE = 1024
 ThreadCount = 0
 UDP_PORT = 13117
@@ -35,6 +36,10 @@ clientSockets = []
 clientNames = []
 handleClientLock = threading.Lock()
 
+'''
+    offer thread function that broadcasts an offer message every second
+'''
+
 
 def offerStage():
     try:
@@ -45,25 +50,37 @@ def offerStage():
             sleep(1)
         udpSocket.close()
     except Exception as e:
-        print("From offerStage" + e)   
-        udpSocket.close()    
+        print("From offerStage" + e)
+        udpSocket.close()
+
+
+'''
+    read the client name from the client socket
+'''
 
 
 def read_name(conn):
     try:
-        clientName = conn.recv(MAX_BUFFER_SIZE).decode() #recv is returning the name with \n at the end
-        clientName = clientName[ : -1] #removing \n in the end of the name
+        # recv is returning the name with \n at the end
+        clientName = conn.recv(MAX_BUFFER_SIZE).decode()
+        clientName = clientName[: -1]  # removing \n in the end of the name
         clientNames.append(clientName)
         print("{} has joined the game".format(clientName))
         return clientName
     except Exception as e:
-        print("From read_name" + e)   
+        print("From read_name" + e)
         conn.close()
+
+
+'''
+    the client thread function that sends the question and waits for answer
+'''
 
 
 def handle_client(conn, clientIndex, question, answer):
     global winningTeam
-    msg = "Welcome to Quick Maths. \nPlayer 1: {} \nPlayer 2: {} \n== \nPlease answer the following question as fast as you can: \nHow much is {}?".format(clientNames[0], clientNames[1],question)
+    msg = "Welcome to Quick Maths. \nPlayer 1: {} \nPlayer 2: {} \n== \nPlease answer the following question as fast as you can: \nHow much is {}?".format(
+        clientNames[0], clientNames[1], question)
     try:
         conn.send(msg.encode())
         clientAns = conn.recv(MAX_BUFFER_SIZE).decode()
@@ -83,8 +100,13 @@ def handle_client(conn, clientIndex, question, answer):
                 closeConnections()
             handleClientLock.release()
     except Exception as e:
-        print("From handle_client" + e)   
+        print("From handle_client" + e)
         conn.close()
+
+
+'''
+    accept two clients to the game and add them to the list of clients
+'''
 
 
 def accept_clients(serverSocket):
@@ -96,7 +118,12 @@ def accept_clients(serverSocket):
         clientSockets.append(clientSocket1)
         clientSockets.append(clientSocket2)
     except Exception as e:
-        print("From accept_clients" + e)    
+        print("From accept_clients" + e)
+
+
+'''
+    starts the server socket and returns it
+'''
 
 
 def start_server():
@@ -108,16 +135,25 @@ def start_server():
         print("Server started, listening on IP address {}".format(SERVER_IP))
         return serverSocket
     except Exception as e:
-        print("From start_server" + e)       
+        print("From start_server" + e)
 
 
 '''
 returns a tuple of type (string,int) representing (question,answer)
 '''
 
+'''
+    creates a tuple of (question,answer) and returns it
+'''
+
 
 def generateRandomQuestion() -> tuple:
     return random.choice(questionsList)
+
+
+'''
+    sends the clients the summary of the game
+'''
 
 
 def sendGameSummary():
@@ -139,11 +175,14 @@ def sendGameSummary():
     except Exception as e:
         print("From sendGameSummary" + e)
 
-        
-
 
 def printGameOver():
     print("Game over, sending out offer requests...")
+
+
+'''
+   creates the two client threads and activates them
+'''
 
 
 def playGame():
@@ -156,13 +195,13 @@ def playGame():
             target=handle_client, args=(clientSockets[1], 1, currQuestion,  currAnswer))
         client1GameThread.start()
         client2GameThread.start()
-        client1GameThread.join(timeout=4.0)
-        client2GameThread.join(timeout=4.0)
+        client1GameThread.join(timeout=10.0)
+        client2GameThread.join(timeout=10.0)
         if (client1GameThread.is_alive() and client2GameThread.is_alive()):
             sendGameSummary()
         printGameOver()
     except Exception as e:
-        print("From playGame" + e)       
+        print("From playGame" + e)
 
 
 def closeConnections():
@@ -170,20 +209,24 @@ def closeConnections():
         clientSockets[0].close()
         clientSockets[1].close()
     except Exception as e:
-        print("From closeConnections" + e)       
+        print("From closeConnections" + e)
+
 
 def resetGlobalVars():
-    global winningTeam,needToOffer,clientSockets,clientNames
+    global winningTeam, needToOffer, clientSockets, clientNames
     winningTeam = -1
     needToOffer = True
     clientSockets = []
     clientNames = []
 
+
 def Main():
-    # if devNetwork:
-    #     SERVER_IP = scapy.all.get_if_addr('eth1')
-    # else:
-    #     SERVER_IP = scapy.all.get_if_addr('eth2')
+    print("please select network type: \n1) dev network \n2)test network")
+    typeOfNet = sys.stdin.readline()
+    if typeOfNet == "1":
+        SERVER_IP = scapy.all.get_if_addr('eth1')
+    else:
+        SERVER_IP = scapy.all.get_if_addr('eth2')
 
     serverSocket = start_server()
     while True:
@@ -193,12 +236,12 @@ def Main():
         accept_clients(serverSocket)
         needToOffer = False
         offer_thread.join()
-        sleep(2)
+        sleep(10)
         playGame()
         resetGlobalVars()
     # closeConnections()
 
-    #TODO: sigint and excpetion check
+    # TODO: sigint and excpetion check
 
 
 if __name__ == '__main__':

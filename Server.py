@@ -6,8 +6,8 @@ import struct
 import random
 import scapy.all
 
-questionsList = [("2+2", 4), ("5-2", 3), ("9-7", 2), ("8+1", 9),
-                 ("6-5", 1), ("9-9", 0), ("5+3", 8), ("3+4", 7)]
+questionsList = [("2+2", "4"), ("5-2", "3"), ("9-7", "2"), ("8+1", "9"),
+                 ("6-5", "1"), ("9-9", "0"), ("5+3", "8"), ("3+4", "7")]
 devNetwork = True
 client1GameThread = None
 client2GameThread = None
@@ -16,8 +16,8 @@ currAnswer = None
 ANS_POS = 0
 TIME_POS = 1
 SERVER_IP = socket.gethostbyname(socket.gethostname())
-SERVER_PORT = 5050
-MAX_BUFFER_SIZE = 2048
+SERVER_PORT = random.randrange(5000,7000)
+MAX_BUFFER_SIZE = 1024
 ThreadCount = 0
 UDP_PORT = 13117
 FORMAT = 'utf-8'
@@ -37,43 +37,57 @@ handleClientLock = threading.Lock()
 
 
 def offerStage():
-    udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    while needToOffer:
-        udpSocket.sendto(udpMsg, UDP_ADDR)
-        sleep(1)
-    udpSocket.close()
+    try:
+        udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        while needToOffer:
+            udpSocket.sendto(udpMsg, UDP_ADDR)
+            sleep(1)
+        udpSocket.close()
+    except Exception as e:
+        print(e)
+        udpSocket.close()    
 
 
 def read_name(conn):
-    clientName = conn.recv(1024).decode()
-    print("received name")
-    clientNames.append(clientName)
-    print(f"{clientName} has joined the game")
-    return clientName
+    try:
+        clientName = conn.recv(MAX_BUFFER_SIZE).decode() #recv is returning the name with \n at the end
+        clientName = clientName[ : -1] #removing \n in the end of the name
+        clientNames.append(clientName)
+        print("{} has joined the game".format(clientName))
+        return clientName
+    except Exception as e:
+        print(e)
+        conn.close()
 
 
 def handle_client(conn, clientIndex, question, answer):
     global winningTeam
-    conn.send(question.encode())
-    clientAns = conn.recv(1024).decode()
-    if(clientAns == answer):  # correct answer
+    msg = "Welcome to Quick Maths. \nPlayer 1: {} \nPlayer 2: {} \n== \nPlease answer the following question as fast as you can: \nHow much is {}?".format(clientNames[0], clientNames[1],question)
+
+    conn.send(msg.encode())
+    clientAns = conn.recv(MAX_BUFFER_SIZE).decode()
+
+    if(clientAns == answer and clientAns != ""):  # correct answer
         handleClientLock.acquire()
         if winningTeam == -1:  # if no one has answered yet
             winningTeam = clientIndex
             sendGameSummary()
+            closeConnections()
         handleClientLock.release()
-    else:
+    elif (clientAns != ""):
         handleClientLock.acquire()
         if winningTeam == -1:
             winningTeam = 1-clientIndex
             sendGameSummary()
+            closeConnections()
         handleClientLock.release()
+    # else:
+    #     sendGameSummary()
 
 
 def accept_clients(serverSocket):
     clientSocket1, addr1 = serverSocket.accept()
-    print(addr1)
     read_name(clientSocket1)
     clientSocket2, addr2 = serverSocket.accept()
     read_name(clientSocket2)
@@ -83,6 +97,7 @@ def accept_clients(serverSocket):
 
 def start_server():
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     serverSocket.bind((SERVER_IP, SERVER_PORT))
     serverSocket.listen()  # server is listening for client connection
     print("Server started, listening on IP address {}".format(SERVER_IP))
@@ -99,15 +114,22 @@ def generateRandomQuestion() -> tuple:
 
 
 def sendGameSummary():
-    # generate summary string
-    msg = "Game Over!\nThe correct answer was {}!\n\nCongratulations to the winner: {}".format(
-        currAnswer, clientNames[winningTeam])
+    msg = ""
+    if winningTeam != -1:
+        # generate summary string
+        msg = "Game Over!\nThe correct answer was {}!\n\nCongratulations to the winner: {}".format(
+            currAnswer, clientNames[winningTeam]).encode()
+    else:
+        msg = "Game Over!\nThe correct answer was {}!\n\nThe game ended with a tie".format(
+            currAnswer).encode()
 
-    # send summary to client
+        # send summary to client
     clientSoc = clientSockets[0]
     clientSoc.send(msg)
     clientSoc = clientSockets[1]
     clientSoc.send(msg)
+
+        
 
 
 def printGameOver():
@@ -115,6 +137,7 @@ def printGameOver():
 
 
 def playGame():
+    global currQuestion, currAnswer
     currQuestion, currAnswer = generateRandomQuestion()
     client1GameThread = threading.Thread(
         target=handle_client, args=(clientSockets[0], 0, currQuestion, currAnswer))
@@ -122,11 +145,13 @@ def playGame():
         target=handle_client, args=(clientSockets[1], 1, currQuestion,  currAnswer))
     client1GameThread.start()
     client2GameThread.start()
-    client1GameThread.join(timeout=10.0)
-    client2GameThread.join(timeout=10.0)
+    client1GameThread.join(timeout=4.0)
+    client2GameThread.join(timeout=4.0)
+    if (client1GameThread.is_alive() and client2GameThread.is_alive()):
+        sendGameSummary()
 
     # send summary to both clients
-    sendGameSummary()
+    # sendGameSummary()
 
     printGameOver()
 
@@ -135,23 +160,30 @@ def closeConnections():
     clientSockets[0].close()
     clientSockets[1].close()
 
+def resetGlobalVars():
+    global winningTeam,needToOffer,clientSockets,clientNames
+    winningTeam = -1
+    needToOffer = True
+    clientSockets = []
+    clientNames = []
 
 def Main():
     # if devNetwork:
     #     SERVER_IP = scapy.all.get_if_addr('eth1')
     # else:
     #     SERVER_IP = scapy.all.get_if_addr('eth2')
-
-    global needToOffer
     serverSocket = start_server()
-    offer_thread = threading.Thread(target=offerStage)
-    offer_thread.start()
-    accept_clients(serverSocket)
-    needToOffer = False
-    offer_thread.join()
-    sleep(10)
-    playGame()
-    closeConnections()
+    while True:
+        global needToOffer
+        offer_thread = threading.Thread(target=offerStage)
+        offer_thread.start()
+        accept_clients(serverSocket)
+        needToOffer = False
+        offer_thread.join()
+        sleep(2)
+        playGame()
+        resetGlobalVars()
+    # closeConnections()
 
 
 # def accept_clients(server):

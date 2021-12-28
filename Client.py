@@ -4,10 +4,22 @@ import struct
 import sys
 
 bufferSize = 1024
-udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-tcpSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+udpSocket = None
+tcpSocket = None
+
 teamName = "sasha"
 UDP_PORT = 13117
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 def getServerPort(msg):
@@ -23,6 +35,11 @@ def getServerPort(msg):
     except Exception:
         return -1
 
+def initiateSockets():
+    global udpSocket,tcpSocket
+    udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    tcpSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
 
 def initTcpConnection(serverAddr):
     try:
@@ -37,7 +54,7 @@ def initTcpConnection(serverAddr):
 def handleGame():
     try:
         welcomeMsg = tcpSocket.recv(bufferSize).decode()
-        print(welcomeMsg)
+        print("{}{}".format(bcolors.OKCYAN,welcomeMsg))
     except Exception:
         tcpSocket.close()
 
@@ -47,18 +64,18 @@ def handleGame():
         try:
             tcpSocket.send(answer.encode())
             summaryMsg = tcpSocket.recv(bufferSize).decode()
-            print(summaryMsg)
+            print("{}{}".format(bcolors.OKGREEN,summaryMsg))
         except Exception as e:
             tcpSocket.close()
-            print(e)
+            print("{}{}".format(bcolors.FAIL,e))
 
     else:  # other client answered or no one answered
         try:
             summaryMsg = tcpSocket.recv(bufferSize).decode()
-            print(summaryMsg)
+            print("{}{}".format(bcolors.OKBLUE,summaryMsg))
         except Exception as e:
             tcpSocket.close()
-            print(e)
+            print("{}{}".format(bcolors.FAIL,e))
 
 
 def closeConnections():
@@ -68,22 +85,24 @@ def closeConnections():
 
 def Main():
     global udpSocket, tcpSocket
-    udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    udpSocket.bind(("", UDP_PORT))
-    print("Client started, listening for offer requests...")
+    while True:
+        initiateSockets()
+        udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        udpSocket.bind(("", UDP_PORT))
+        print(f"{bcolors.OKBLUE}Client started, listening for offer requests...")
 
-    serverMsg, serverIP = udpSocket.recvfrom(bufferSize)
-    serverIP = serverIP[0]
-    serverPort = getServerPort(serverMsg)
-    if serverPort != -1:
-        print("Received offer from {},attempting to connect...".format(serverIP))
-        serverAddr = (serverIP, serverPort)
-        initSuccess = initTcpConnection(serverAddr)
-        if initSuccess:
-            handleGame()
-    else:
-        print("bad offer message or some other socket error")
-    closeConnections()
+        serverMsg, serverIP = udpSocket.recvfrom(bufferSize)
+        serverIP = serverIP[0]
+        serverPort = getServerPort(serverMsg)
+        if serverPort != -1:
+            print("{}Received offer from {},attempting to connect...".format(bcolors.OKGREEN,serverIP))
+            serverAddr = (serverIP, serverPort)
+            initSuccess = initTcpConnection(serverAddr)
+            if initSuccess:
+                handleGame()
+        else:
+            print(f"{bcolors.FAIL}bad offer message or some other socket error")
+        closeConnections()
 
 
 if __name__ == "__main__":

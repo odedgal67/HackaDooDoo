@@ -4,8 +4,20 @@ import threading
 from time import sleep, time
 import struct
 import random
-import scapy.all
+# import scapy.all
 import sys
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 
 questionsList = [("2+2", "4"), ("5-2", "3"), ("9-7", "2"), ("8+1", "9"),
                  ("6-5", "1"), ("9-9", "0"), ("5+3", "8"), ("3+4", "7")]
@@ -50,7 +62,7 @@ def offerStage():
             sleep(1)
         udpSocket.close()
     except Exception as e:
-        print("From offerStage" + e)
+        print("{}From offerStage {}".format(bcolors.FAIL,e))
         udpSocket.close()
 
 
@@ -65,10 +77,10 @@ def read_name(conn):
         clientName = conn.recv(MAX_BUFFER_SIZE).decode()
         clientName = clientName[: -1]  # removing \n in the end of the name
         clientNames.append(clientName)
-        print("{} has joined the game".format(clientName))
+        print("{}{} has joined the game".format(bcolors.OKGREEN,clientName))
         return clientName
     except Exception as e:
-        print("From read_name" + e)
+        print("{}From read_name {}".format(bcolors.FAIL, e))
         conn.close()
 
 
@@ -100,7 +112,7 @@ def handle_client(conn, clientIndex, question, answer):
                 closeConnections()
             handleClientLock.release()
     except Exception as e:
-        print("From handle_client" + e)
+        print("{}From handle_client {}".format(bcolors.FAIL,e))
         conn.close()
 
 
@@ -118,7 +130,7 @@ def accept_clients(serverSocket):
         clientSockets.append(clientSocket1)
         clientSockets.append(clientSocket2)
     except Exception as e:
-        print("From accept_clients" + e)
+        print("{}From accept_clients {}".format(bcolors.FAIL,e))
 
 
 '''
@@ -131,11 +143,11 @@ def start_server():
         serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serverSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         serverSocket.bind((SERVER_IP, SERVER_PORT))
-        serverSocket.listen()  # server is listening for client connection
-        print("Server started, listening on IP address {}".format(SERVER_IP))
+        serverSocket.listen(2)  # server is listening for client connection
+        print("{}Server started, listening on IP address {}".format(bcolors.OKCYAN,SERVER_IP))
         return serverSocket
     except Exception as e:
-        print("From start_server" + e)
+        print("{}From start_server {}".format(bcolors.FAIL,e))
 
 
 '''
@@ -173,11 +185,11 @@ def sendGameSummary():
         clientSoc = clientSockets[1]
         clientSoc.send(msg)
     except Exception as e:
-        print("From sendGameSummary" + e)
+        print("{}From sendGameSummary {}".format(bcolors.FAIL,e))
 
 
 def printGameOver():
-    print("Game over, sending out offer requests...")
+    print("{}Game over, sending out offer requests...".format(bcolors.OKBLUE))
 
 
 '''
@@ -201,7 +213,7 @@ def playGame():
             sendGameSummary()
         printGameOver()
     except Exception as e:
-        print("From playGame" + e)
+        print("{}From playGame {}".format(bcolors.FAIL,e))
 
 
 def closeConnections():
@@ -209,7 +221,7 @@ def closeConnections():
         clientSockets[0].close()
         clientSockets[1].close()
     except Exception as e:
-        print("From closeConnections" + e)
+        print("{}From closeConnections {}".format(bcolors.FAIL,e))
 
 
 def resetGlobalVars():
@@ -221,12 +233,12 @@ def resetGlobalVars():
 
 
 def Main():
-    print("please select network type: \n1) dev network \n2)test network")
-    typeOfNet = sys.stdin.readline()
-    if typeOfNet == "1":
-        SERVER_IP = scapy.all.get_if_addr('eth1')
-    else:
-        SERVER_IP = scapy.all.get_if_addr('eth2')
+    # print(Fore.Blue + "please select network type: \n1) dev network \n2)test network")
+    # typeOfNet = sys.stdin.readline()
+    # if typeOfNet == "1":
+    #     SERVER_IP = scapy.all.get_if_addr('eth1')
+    # else:
+    #     SERVER_IP = scapy.all.get_if_addr('eth2')
 
     serverSocket = start_server()
     while True:

@@ -151,7 +151,7 @@ def Main():
     while True:
         initiateSockets()
         udpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        udpSocket.bind(("", UDP_PORT))
+        udpSocket.bind(("172.99.255.255", UDP_PORT))
         print(
             f"{bcolors.OKBLUE}Client started, listening for offer requests...{bcolors.ENDC}")
 
